@@ -1,6 +1,6 @@
 package HTML::Validator;
 
-# Copyright 1997,1998 Sami Itkonen <si@iki.fi>
+# Copyright 1997-1999 Sami Itkonen <si@iki.fi>
 #
 # Distributed under the GNU General Public License
 
@@ -11,9 +11,11 @@ use vars qw($VERSION);
 use LWP::Simple;
 use FileHandle;
 use Carp;
-$VERSION = "0.06";
+$VERSION = "0.07";
 
 my $tmpfile;
+my $tmpdir;
+my $tmpdtd;
 
 my $defaultdtd = 'html4';
 
@@ -60,11 +62,19 @@ sub new {
   bless $self, $class;
 #    $self->initialize();
   my $file = shift;
-  $tmpfile = "/tmp/validator.$$";
+  $tmpdir = "/tmp/validator-".$ENV{USER}."$$/";
+  $tmpfile = $tmpdir . $ENV{USER} . time unless defined $tmpfile;
   $self->{tmpfile} = $tmpfile;
+  $self->{tmpdir} = $tmpdir;
+#  print $tmpdir,"\n";
+#  print $tmpfile,"\n";
+  $self->deltempfiles;
+  mkdir $tmpdir,0700;
   $self->open($file) if defined $file; 
   $self->{catalog} = "@DTD@/catalog";
   $self->{nsgmls} = "@NSGMLS@";
+  $self->{xmldir} = "@XML@";
+  $self->{xmlcat} = "@XML@/xhtml.soc";
   $self->{defaultdtd} = $defaultdtd;
   $self->{dtdmap} = $dtdmap;
   return $self;
@@ -110,6 +120,9 @@ object via the constructor or the I<open> method.
 
 If the file has not been retrieved yet, it will be done.
 
+If you want to replace the document type, you must do so with the first
+call to this method. The document types are defined in $doc->{dtdmap}.
+
 =cut
 
 #---------------------------------------------
@@ -120,6 +133,7 @@ sub doctype {
   my $obj = shift;
   
   my ($input) = shift;
+
   if (defined $input) {
     $obj->{newdoctype} = $input;
   }
@@ -127,7 +141,6 @@ sub doctype {
     return undef unless defined $obj->{file};
     $obj->get_file unless defined $obj->{data};
     return $obj->{doctype};
-    
   }
 }
 
@@ -146,15 +159,23 @@ is not defined.
 sub checkdtd {
   my $obj = shift;
   return $obj->{dtdfile} if defined $obj->{dtdfile};
-  return undef unless defined $obj->{doctype};
+  return undef unless defined $obj->{"doctype"};
+  my $dtdfile;
 #  print $obj->{doctype},"\n";
+  my ($id,$url) = $obj->{"doctype"} =~ /\"(.*?)\"\s*\"(.*?)\"/;
+  if (defined $url) {
+    $obj->{dtdfile} = $url;
+    $obj->{"doctype"} =~ s/\s*\"$url\"\s*$//;
+    return $dtdfile;
+  }
   my $fh = new FileHandle;
-  return -1 unless open($fh,$obj->{catalog});
-  my $dtdregexp = $obj->{doctype};
-  $dtdregexp =~ s/\s+/\\s\+/g;
+  return -1 unless CORE::open($fh,$obj->{catalog});
+  my $dtdregexp = $obj->{"doctype"};
+  $dtdregexp =~ s/\s+/\\s\+/gs;
+  $dtdregexp =~ s/\[/\\\[/gs;
 #  print $dtdregexp,"\n";
   while (my $line = <$fh>) {
-    if (my ($dtdfile) = $line =~ /$dtdregexp\s+(.*?)$/) {
+    if (($dtdfile) = $line =~ /$dtdregexp\s+(.*?)$/) {
       close($fh);
       $obj->{dtdfile} = $dtdfile;
       return $dtdfile;
@@ -203,14 +224,27 @@ sub validate {
   my $fh = $obj->{fh};
   my $nsgmls = $obj->{nsgmls};
   my $catalog = $obj->{catalog};
-  
+  my $xmlcat = $obj->{xmlcat};
+
   if ($nsgmls =~ m:/: && ! -e $nsgmls) {
 #    carp("nsgmls binary '$nsgmls' not found");
     $obj->message("Nsgmls not found");
     return undef;
   }
+
+  my $opts = defined $obj->{maxerr} ? "-E ".$obj->{maxerr} . " " : "";
+
 #  print "$file $nsgmls $catalog\n";
-  if (!open($fh,"$nsgmls -s -c$catalog $file 2>&1 |")) {
+  if (defined $obj->{XML}) {
+    $opts .= "-wxml -c$xmlcat";
+  }
+  else {
+    $opts .= "-c $catalog";
+  }
+
+#  print "$nsgmls -s $opts $file 2>&1 |\n";
+
+  if (!CORE::open($fh,"$nsgmls -s $opts $file 2>&1 |")) {
     $obj->message("Unable to execute nsgmls");
     return undef;
   }
@@ -226,6 +260,7 @@ sub validate {
 #  $obj->message("valid");
   $obj->parse_errors;
 #  $obj->message("Document is valid") if $obj->{valid};
+#  print $obj->{valid},"\n";
   return $obj->{errors};
 }
 
@@ -255,34 +290,112 @@ sub get_file {
   else {
     my $oldsep = $/;
     undef $/;
-    return undef unless open($fh,$obj->{url});
+    return undef unless CORE::open($fh,$obj->{url});
     
     $data = <$fh>;
     close($fh);
     $/ = $oldsep;
     
   }
+  my $xmlrxp = '\s*\<\s*\?\s*xml\s+.*?\s*\?\s*\>';
+  my ($xml) = $data =~ /^($xmlrxp*)/s;
 
-  my ($dtd) = $data =~ /^\s*\<\s*\!DOCTYPE HTML\s*(.*?)\>\s*/;
-  $obj->{doctype} = $dtd;
+  if (defined $xml) {
+    $obj->{XML} = $xml;
+  }
+
+  my $docrxp = '\s*\<\s*\!DOCTYPE\s+(\w+)\s*(\[.*?\]|.*?)\s*\>';
+  my ($type,$dtd) = $data =~ /$docrxp/s;
+
+#  print $docrxp,"\n";
   $obj->{data} = $data;
-    
-  if (my $type =  $obj->{newdoctype}) {
-    if (my $dtdstr = $obj->{dtdmap}->{$type}) {
-      $obj->replace_dtd($dtdstr);
+
+  if (!defined $obj->{XML}) {
+    if (defined $type && $type !~ /HTML/) {    
+      $obj->{XML} = $type;
+    }
+    else {
+      $obj->{"doctype"} = $dtd;
+      if (my $type =  $obj->{newdoctype}) {
+	if (my $dtdstr = $obj->{dtdmap}->{$type}) {
+	  $obj->replace_dtd($dtdstr);
+	}
+      }
+      elsif ($dtd =~ /^\s*$/) {
+	$obj->replace_dtd;
+      }
     }
   }
-  elsif ($dtd =~ /^\s*$/) {
-     $obj->replace_dtd;
+
+  if (defined $obj->{XML}) {
+    $obj->{"doctype"} = $dtd;
   }
 
   $obj->checkdtd;
+# check if the doctype contains an URL
+
+  my ($id,$url) = $dtd =~ /\"(.*?)\"\s*\"(.*?)\"/;
+  unless (defined $url) {
+#    print $dtd,"\n";
+    ($id,$url) = $dtd =~ /(.*?)\s*\"(.*?)\"/;
+#     print $id,"\n",$url,"\n";
+  }
+  if (defined $url) {
+    # we might have to download this
+    if ($url =~ m,http://\S+,) {
+      if (defined $obj->{subst_URL}) {
+	$obj->substitute_dtd_url($url);
+      }
+    }
+    else {
+      # a local document, we'll have to make sure it is found
+#      print $url,"\n";
+      if (index($url,"/") lt 0) {
+	$tmpdtd = $tmpdir."/".$url;
+	if (-r $url) {
+	  system ("cp", $url,$tmpdir);
+	  $obj->{dtdfile} = $url;
+	}
+	elsif (-r $obj->{xmldir}."/".$url) {
+	  system ("cp", $obj->{xmldir}."/".$url,$tmpdir);
+	  $obj->{dtdfile} = $url;
+	}
+      }
+#      print "$tmpdtd\n";
+    }
+  }
+
 #  print $data,"\n";
 #    system("cp",$obj->{url},$obj->{file});
 
-  return undef unless open($fh,">$obj->{file}");
+  return undef unless CORE::open($fh,">$obj->{file}");
   print $fh $obj->{data};
   close($fh);
+}
+
+=item $doc->substitute_dtd_url
+
+If there is an URL in the doctype, it will be replaced to support
+nsgmls binaries that do not support URLs
+
+=cut
+
+#---------------------------------------------
+# substitutes the url in dtd 
+#---------------------------------------------
+
+sub substitute_dtd_url {
+    my $obj = shift;
+    my ($url) = @_;
+
+    unlink $tmpdtd if defined $tmpdtd;
+    undef $tmpdtd;
+
+    $tmpdtd = $obj->{tmpdir} . substr($url, rindex ($url, '/') + 1);
+ 
+    if (getstore($url,$tmpdtd) eq "200") {
+       $obj->{data} =~ s/$url/$tmpdtd/;
+    }
 }
 
 =item $doc->replace_dtd
@@ -303,21 +416,21 @@ sub replace_dtd {
   my $dtdstr = "<!DOCTYPE HTML " . $dtd . ">";
 #  print $dtd,"\n";
   my $data = $obj->{data};
-  if ($obj->{doctype} =~ /^\s*$/) {
+  if ($obj->{"doctype"} =~ /^\s*$/) {
     # no doctype; need a new one
     $data =~ s/^/$dtdstr\n/;
     $obj->message("No document type defined");
   }
   else {
     # just replace it
-    $data =~ s/^\s*\<\s*\!DOCTYPE HTML\s*(.*?)\>\s*/$dtdstr\n/i;
+    $data =~ s/\s*\<\s*\!DOCTYPE HTML\s*(.*?)\>\s*/$dtdstr\n/i;
   }
   $obj->message("Replacing dtd with '$dtd'");
   $obj->{data} = $data;
 #  print $obj->{newdoctype},"\n";
 #  print $obj->{defaultdtd},"\n";
 #  print "$data\n";
-  $obj->{doctype} = $dtd;
+  $obj->{"doctype"} = $dtd;
 }
 
 =item $doc->errors
@@ -360,7 +473,7 @@ $doc->parser() by default. It can overriden by setting $doc->{parser}.
 sub parse_errors {
   my $obj = shift;
 
-  return undef if defined $obj->{errors};
+  return undef if defined $obj->{"errors"};
 
   my $error_output;
 
@@ -376,14 +489,14 @@ sub parse_errors {
     $obj->message("Document is invalid");
     $obj->{valid} = 0;
     my @array = @{$error_output};
-    $obj->{errors} = \@array;
+    $obj->{"errors"} = \@array;
   }
   else {
     # the document is valid
     $obj->message("Document is valid");
     $obj->{valid} = 1;
   }
-
+#  print $obj->{valid},"\n";
 }
 
 =item $doc->parser
@@ -408,14 +521,18 @@ sub parser {
   my $i=0;
   my $valid = 1;
 
-  while ($output =~ /^(.*?)\n/g) {
+#  print $output,"\n";
+  return undef unless defined $output;
+  while ($output =~ s/^(.*?)\n//) {
     my $line = $1;
 
+#    print $line,"\n";
     $line =~ s/^$obj->{nsgmls}://;
     next if $line =~ /\.dtd:(\d+):(\d):E: /;
     next if $line =~ /^\s*$/;
-
-    if ($line =~ s/^$obj->{file}://) {
+#    print $line,"\n";
+    next if $line =~ /is not a character number/;
+    if ($line =~ s/^.*?://) {
 
       if ($line =~ s/^(\d+):(\d+):E: // || $line =~ s/^(\d+):(\d+): //
 	 || $line =~ s/^(\d+):(\d+):W: //) {
@@ -425,8 +542,9 @@ sub parser {
       $errors[$i] .= "$line";
       $i++;
     }
-    $output =~ s/^.*?\n//;
+#    $output =~ s/^.*?\n//;
   }
+
   return $valid ? undef : \@errors;
 }
 
@@ -484,7 +602,8 @@ If the argument is '-1', the last message on the queue is returned.
 sub message {
   my $obj = shift;
   my ($msg) = @_;
-  my $r = $obj->{message};
+  my $r = $obj->{"message"};
+#  return undef unless defined $r;
   my @array;
   @array = @{$r} if defined $r;
   if (defined $msg) {
@@ -505,6 +624,42 @@ sub message {
   return $msg;
 }
 
+=item $doc->reset
+
+Resets the object to original state so we can reuse it
+
+=cut
+
+#----------------------------------------------
+# reset all values so we can reuse the object
+#----------------------------------------------
+
+sub reset {
+  my $obj = shift;
+  $obj->deltempfiles;
+  delete $obj->{"doctype"};
+  delete $obj->{newdoctype};
+  delete $obj->{dtdfile};
+  delete $obj->{"errors"};
+  delete $obj->{"message"};
+  undef $obj->{valid};
+  delete $obj->{data};
+  delete $obj->{file};
+  delete $obj->{url};
+  delete $obj->{useLWP};
+  delete $obj->{XML};
+}
+
+#----------------------------------------------
+# delete temporary files
+#----------------------------------------------
+
+sub deltempfiles {
+  unlink $tmpfile;
+  unlink $tmpdtd if defined $tmpdtd;
+#  rmdir $tmpdir;
+}
+
 #----------------------------------------------
 # The destructor
 #----------------------------------------------
@@ -512,7 +667,8 @@ sub message {
 END { 
   my $obj = shift;
 #  print $tmpfile,"\n";
-  unlink $tmpfile;
+  deltempfiles;
+  rmdir $tmpdir;
 };
 
 1;
@@ -534,6 +690,10 @@ The used catalog file
 =item $doc->{message}
 
 Array of messages
+
+=item $doc->{maxerr}
+
+The maximum number of errors. This is passed to nsgmls with the C<-E> option
 
 =item $doc->{doctype}
 

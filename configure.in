@@ -101,6 +101,31 @@ fi
 AC_MSG_RESULT($DTD)
 AC_SUBST(DTD)
 
+AC_MSG_CHECKING(for the placement of the XML dtd files)
+
+AC_ARG_WITH(xml, 
+[  --with-xml-dtd=PATH         Where the XML dtd files are/will be located],
+[case "$withval" in
+  yes)
+  	;;
+  no)
+	;;
+  *)
+	XML="$withval";
+	;;
+esac
+],[
+if test "$prefix" = "NONE";
+then
+XML="/usr/local/lib/WD-html-in-xml/DTD";
+else
+XML="$prefix/lib/WD-html-in-xml/DTD";
+fi
+])
+
+AC_MSG_RESULT($XML)
+AC_SUBST(XML)
+
 dnl
 dnl Create output
 dnl

@@ -8,3 +8,11 @@ configure
 Makefile.PL
 Validator.pm.in
 bin/validate
+t/html.t   
+t/xhtml.t
+t/xml.t
+t/invalid.html
+t/valid.html
+t/xhtml.html
+t/invalid.xml
+t/valid.xml

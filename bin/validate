@@ -72,10 +72,24 @@ use FileHandle;
 
 my $ME = substr($0, rindex ($0, '/') + 1);
 
+Getopts('vhlsn:c:e:d:pf');
 
-Getopts('vhn:c:d:p');
+my $maxerr = defined $opt_e ? $opt_e : 10;
 
 &Usage if $opt_h;
+
+#
+if (defined $opt_l) {
+    my $list = new HTML::Validator;
+    my $map = $list->{dtdmap};
+    print "$ME © 1998,1999 Sami Itkonen\n\n";
+    print "List of recognized document types (for -d switch):\n\n";
+    foreach $htmlstr (keys %{$map}) {
+       printf "%-15s %s\n",$htmlstr,${$map}{$htmlstr};
+    }
+    print "\n";
+    exit 0;
+}
 
 # check the standard input
 
@@ -89,20 +103,28 @@ if (!$ARGV[0] && !$stdin) {&Usage;exit}
 if ($stdin) {
   my $TMPFILE = "/tmp/html.validate.$$";
   my ($fh) = new FileHandle;
-  my ($fo) = new FileHandle;
-  open($fh,"-") or die "can't open stdin\n";
-  if (open($fo,">$TMPFILE")) {
-    my $oldsep = $/;
-    undef $/;
-    my $data = <$fh>;
-    print $fo $data;
-    close($fo);
-    $/ = $oldsep;
-    &CheckFile(STDIN,$TMPFILE);
-    unlink($TMPFILE);		
+  open($fh,"-") or carp("Can't open stdin");
+  if ($opt_f) {
+    while (<$fh>) {
+      chomp;
+      unshift(@ARGV,$_);
+    }
   }
   else {
-    carp("Can't write to file '$TMPFILE'");
+    my ($fo) = new FileHandle;
+    if (open($fo,">$TMPFILE")) {
+      my $oldsep = $/;
+      undef $/;
+      my $data = <$fh>;
+      print $fo $data;
+      close($fo);
+      $/ = $oldsep;
+      &CheckFile(STDIN,$TMPFILE);
+      unlink($TMPFILE);		
+    }
+    else {
+      carp("Can't write to file '$TMPFILE'");
+    }
   }
 }
 
@@ -124,10 +146,14 @@ exit;
 sub CheckFile {
   my ($url,$file) = @_;
   my $doc = new HTML::Validator($file);
-  
+
+  $doc->{subst_URL} = 1 if $opt_s;
+  $doc->{maxerr} = $maxerr;
+
   if (defined $opt_d) {
     $doc->doctype($opt_d);
   }
+
   if ($opt_v) {
     print "Document type for '$url':\n",$doc->doctype 
       , " (" , $doc->{dtdfile} ,")\n\n";
@@ -150,7 +176,8 @@ sub CheckFile {
       while (my $msg = $doc->message) {
 	print " ",$msg,"\n";
       }
-      print "\n";
+#      print "\n";
+
       while (my $error = $doc->errors) {
 	print $error,"\n";
       }
@@ -160,6 +187,7 @@ sub CheckFile {
       print "File '$url': ",$doc->message,"\n";
   }
   print "\n" if $opt_v || !$doc->is_valid;
+
 }
 
 #-----------------------------------------------------------------------------
@@ -191,9 +219,10 @@ sub my_parser {
     my @errors;
     while ($output =~ s/^(.*?)\n//) {
       my $line = $1;
-      my ($nsgmls,$file,$li,$pos,$code,$error) = 
-	$line =~ /^(.*?):(.*?):(.*?):(.*?):(.*?):(.*)/;
+      my ($nsgmls,$file,$li,$pos,$error) = 
+	$line =~ /^(.*?):(.*?):(.*?):(.*?):(.*)/;
       next if $file =~ /sgml-lib/;
+      $error =~ s/^E://;
       push (@errors,"Error in line $li, position $pos:\n$error\n");
       $valid = 0;
     }
@@ -217,9 +246,13 @@ Checks the validity of html files, both locally and via http
     -v		 verbose mode
     -p           use a custom parser in this script 
                  (for demonstation purposes only)
+    -s           substitute URLs in doctypes
+    -e           maximum number of errors to show (default $maxerr);
+    -f           read the filenames to check from stdin
     -d <doctype> use a different document type
     -c <catalog> substitute <catalog> for the default catalog file
     -n <nsgmls>  substitute <nsgmls> for nsgmls
+    -l           list HTML identifiers
 
 EOF
 }

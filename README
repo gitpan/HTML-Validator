@@ -14,6 +14,8 @@ HTML::Validator is based on a validator script I wrote in 1997-1998
 (nsgmls, LWP) are identical to those of some validator engines on the web 
 <URL:http://validator.w3c.org/>, HTML::Validator uses none of their code.
 
+XML files are also validated; for this the nsgmls version needs to be 1.3
+or greater.
 
 REQUIREMENTS
 
@@ -29,7 +31,8 @@ REQUIREMENTS
 
 	- you can use W3C's sgml library files that are
 	  found from <URL:http://validator.w3.org/sgml-lib.tar.gz>
-
+        - for XHTML the document type files can be downloaded from
+          http://www.w3.org/TR/WD-html-in-xml/WD-html-in-xml.zip
 
 INSTALLATION
 
@@ -54,6 +57,14 @@ all the default options in addition to these:
 
      By default HTML::Validator expects the dtd files to be found from
      /usr/local/lib/sgml-lib/.     
+
+--with-xml=PATH 
+
+     Specify the directory where the doctype definitions are found. Note that
+     a file called 'xhtml.soc' is expected to be found from this directory. 
+
+     By default HTML::Validator expects the dtd files to be found from
+     /usr/local/lib/WD-html-in-xml/DTD/.     
 
 Writing these will do the rest:
 

@@ -15,6 +15,8 @@ ac_help="$ac_help
   --with-nsgmls=PATH      Path to NSGMLS executable"
 ac_help="$ac_help
   --with-dtd=PATH         Where the dtd files are/will be located"
+ac_help="$ac_help
+  --with-xml-dtd=PATH         Where the XML dtd files are/will be located"
 
 # Initialize some variables set by options.
 # The variables have the same names as the options, with
@@ -543,7 +545,7 @@ case ""$withval"" in
 	# Extract the first word of "nsgmls", so it can be a program name with args.
 set dummy nsgmls; ac_word=$2
 echo $ac_n "checking for $ac_word""... $ac_c" 1>&6
-echo "configure:547: checking for $ac_word" >&5
+echo "configure:549: checking for $ac_word" >&5
 if eval "test \"`echo '$''{'ac_cv_path_NSGMLS'+set}'`\" = set"; then
   echo $ac_n "(cached) $ac_c" 1>&6
 else
@@ -577,7 +579,7 @@ fi
 	# Extract the first word of "nsgmls", so it can be a program name with args.
 set dummy nsgmls; ac_word=$2
 echo $ac_n "checking for $ac_word""... $ac_c" 1>&6
-echo "configure:581: checking for $ac_word" >&5
+echo "configure:583: checking for $ac_word" >&5
 if eval "test \"`echo '$''{'ac_cv_path_NSGMLS'+set}'`\" = set"; then
   echo $ac_n "(cached) $ac_c" 1>&6
 else
@@ -609,7 +611,7 @@ fi
 	;;
   *)
 	echo $ac_n "checking for nsgmls""... $ac_c" 1>&6
-echo "configure:613: checking for nsgmls" >&5;
+echo "configure:615: checking for nsgmls" >&5;
 	if test -f ""$withval"";
 	then echo "$ac_t""""$withval""" 1>&6;
 	NSGMLS=""$withval"";
@@ -618,7 +620,7 @@ echo "configure:613: checking for nsgmls" >&5;
 	# Extract the first word of "nsgmls", so it can be a program name with args.
 set dummy nsgmls; ac_word=$2
 echo $ac_n "checking for $ac_word""... $ac_c" 1>&6
-echo "configure:622: checking for $ac_word" >&5
+echo "configure:624: checking for $ac_word" >&5
 if eval "test \"`echo '$''{'ac_cv_path_NSGMLS'+set}'`\" = set"; then
   echo $ac_n "(cached) $ac_c" 1>&6
 else
@@ -655,7 +657,7 @@ else
    # Extract the first word of "nsgmls", so it can be a program name with args.
 set dummy nsgmls; ac_word=$2
 echo $ac_n "checking for $ac_word""... $ac_c" 1>&6
-echo "configure:659: checking for $ac_word" >&5
+echo "configure:661: checking for $ac_word" >&5
 if eval "test \"`echo '$''{'ac_cv_path_NSGMLS'+set}'`\" = set"; then
   echo $ac_n "(cached) $ac_c" 1>&6
 else
@@ -689,7 +691,7 @@ fi
 
 
 echo $ac_n "checking for the placement of the dtd files""... $ac_c" 1>&6
-echo "configure:693: checking for the placement of the dtd files" >&5
+echo "configure:695: checking for the placement of the dtd files" >&5
 
 # Check whether --with-dtd or --without-dtd was given.
 if test "${with_dtd+set}" = set; then
@@ -717,6 +719,37 @@ fi
 
 
 echo "$ac_t""$DTD" 1>&6
+
+
+echo $ac_n "checking for the placement of the XML dtd files""... $ac_c" 1>&6
+echo "configure:726: checking for the placement of the XML dtd files" >&5
+
+# Check whether --with-xml or --without-xml was given.
+if test "${with_xml+set}" = set; then
+  withval="$with_xml"
+  case "$withval" in
+  yes)
+  	;;
+  no)
+	;;
+  *)
+	XML="$withval";
+	;;
+esac
+
+else
+  
+if test "$prefix" = "NONE";
+then
+XML="/usr/local/lib/WD-html-in-xml/DTD";
+else
+XML="$prefix/lib/WD-html-in-xml/DTD";
+fi
+
+fi
+
+
+echo "$ac_t""$XML" 1>&6
 
 
 trap '' 1 2 15
@@ -864,6 +897,7 @@ s%@mandir@%$mandir%g
 s%@DATE@%$DATE%g
 s%@NSGMLS@%$NSGMLS%g
 s%@DTD@%$DTD%g
+s%@XML@%$XML%g
 
 CEOF
 EOF
