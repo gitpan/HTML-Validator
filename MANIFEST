@@ -6,6 +6,7 @@ valid.gif
 configure.in
 configure
 Makefile.PL
+Validator.pm
 Validator.pm.in
 bin/validate
 t/html.t   
