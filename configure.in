@@ -1,0 +1,107 @@
+dnl Template file for GNU Autoconf
+dnl Copyright (C) 1995, 1996, 1997 Free Software Foundation, Inc.
+
+dnl This program is free software; you can redistribute it and/or modify
+dnl it under the terms of the GNU General Public License as published by
+dnl the Free Software Foundation; either version 2 of the License, or
+dnl (at your option) any later version.
+
+dnl This program is distributed in the hope that it will be useful,
+dnl but WITHOUT ANY WARRANTY; without even the implied warranty of
+dnl MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+dnl GNU General Public License for more details.
+
+dnl You should have received a copy of the GNU General Public License
+dnl along with this program; if not, write to the Free Software
+dnl Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+
+dnl
+dnl Process this file with autoconf to produce a configure script.
+dnl
+
+AC_INIT(Validator.pm.in)
+AC_PREREQ(1.8)
+
+dnl
+dnl What version of html-check are we building?
+dnl
+
+dnl VERSION=`grep "kameli, version" kameli.in | cut -d \  -f 4`
+dnl echo "configuring for kameli $VERSION"
+dnl AC_SUBST(VERSION)
+
+dnl
+dnl The date
+dnl
+
+DATE=`date "+%a %b %d %Y"`
+AC_SUBST(DATE)
+
+dnl
+dnl Check arguments and use the appropriate program
+dnl
+
+AC_DEFUN(PROG_ARG_CHECK, [
+case "$4" in
+  yes)
+	AC_PATH_PROG($1, $2, $3)
+	;;
+  no)
+	AC_PATH_PROG($1, $2, $3)
+	;;
+  *)
+	AC_MSG_CHECKING(for $2);
+	if test -f "$4";
+	then AC_MSG_RESULT("$4");
+	$1="$4";
+	AC_SUBST($1)
+	else AC_MSG_WARN("$4 not found ");
+	AC_PATH_PROG($1, $2, $3)
+	fi
+	;;
+esac  
+])
+
+dnl
+dnl Finding nsgmls
+dnl
+
+AC_ARG_WITH(nsgmls,
+[  --with-nsgmls=PATH      Path to NSGMLS executable],
+[PROG_ARG_CHECK(NSGMLS, nsgmls, /usr/bin/nsgmls,"$withval")],
+[ AC_PATH_PROG(NSGMLS, nsgmls, /usr/bin/nsgmls)])
+
+dnl 
+dnl check where dtd files are installed
+dnl
+
+AC_MSG_CHECKING(for the placement of the dtd files)
+
+AC_ARG_WITH(dtd, 
+[  --with-dtd=PATH         Where the dtd files are/will be located],
+[case "$withval" in
+  yes)
+  	;;
+  no)
+	;;
+  *)
+	DTD="$withval";
+	;;
+esac
+],[
+if test "$prefix" = "NONE";
+then
+DTD="/usr/local/lib/sgml-lib";
+else
+DTD="$prefix/lib/sgml-lib";
+fi
+])
+
+AC_MSG_RESULT($DTD)
+AC_SUBST(DTD)
+
+dnl
+dnl Create output
+dnl
+AC_OUTPUT(Validator.pm)

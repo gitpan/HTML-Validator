@@ -1,0 +1,8 @@
+COPYING
+README
+MANIFEST
+configure.in
+configure
+Makefile.PL
+Validator.pm.in
+bin/validate

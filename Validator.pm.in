@@ -1,0 +1,376 @@
+package HTML::Validator;
+
+# Copyright 1997,1998 Sami Itkonen <si@iki.fi>
+#
+# Distributed under the GNU General Public License
+
+@ISA=qw(LWP::Simple);
+
+use strict;
+use vars qw($VERSION);
+use LWP::Simple;
+use FileHandle;
+use Carp;
+$VERSION = "0.03";
+
+my $tmpfile;
+
+=head1 NAME
+
+HTML::Validator - HTML validation by using nsgmls
+
+=head1 SYNOPSIS
+
+ use HTML::Validator;
+ $doc = new HTML::Validator($file);
+ $doc->validate;
+ print "Document is valid\n" if $doc->is_valid;
+
+=head1 DESCRIPTION
+
+This module can be used to validate HTML (or SGML) documents. For the
+validation itself, it uses nsgmls and a set of document type definition
+files (aka DTDs).
+
+HTML::Validator uses I<libwww-perl> to validate remote files.
+
+=cut
+
+#---------------------------------------------
+# The constructor
+#---------------------------------------------
+
+sub new {
+  my $this = shift;
+  my $class = ref($this) || $this;
+  my $self = {};
+  bless $self, $class;
+#    $self->initialize();
+  my $file = shift;
+  $tmpfile = "/tmp/validator.$$";
+  $self->{tmpfile} = $tmpfile;
+  $self->open($file) if defined $file; 
+  $self->{catalog} = "@DTD@/catalog";
+  $self->{nsgmls} = "@NSGMLS@";
+  return $self;
+}
+
+=over 4
+
+=item $doc->open($file)
+
+The file or url will be used as the document to validate. This method
+will be called implicitely if the constructor is called with an argument.
+
+=cut
+
+#---------------------------------------------
+# Open a file for read
+#---------------------------------------------
+
+sub open {
+  my $obj = shift;
+  my $file = shift;
+  return undef if defined $obj->{file};
+  $obj->{fh} = new FileHandle;
+  $obj->{url} = $file;
+  if ($file =~ m|^(\w+)://|) {
+    $obj->{file} = $obj->{tmpfile};
+    $obj->{useLWP} = 1;
+  }
+  else {
+    return undef unless -r $file;
+    $obj->{file} = $file;
+    $obj->{url} = $file;
+  }
+  return 1;
+}
+
+=item $doc->doctype
+
+Returns the document type by parsing the start of the file.
+
+The return value is undefined if no filename has been passed to the 
+object via the constructor or the I<open> method.
+
+=cut
+
+#---------------------------------------------
+# read the doctype
+#---------------------------------------------
+
+sub doctype {
+  my $obj = shift;
+  return $obj->{doctype} if defined $obj->{doctype};
+  return undef unless defined $obj->{file};
+  $obj->get_libwww if $obj->{useLWP} && !defined $obj->{valid};
+#  my $oldsep = $/;
+#  undef $/;
+  my $fh = $obj->{fh};
+  return undef unless open($fh,$obj->{file});
+  my $dtdstring = <$fh>;
+#  print "$dtdstring\n";
+  my ($dtd) = $dtdstring =~ /^\s*\<\s*\!DOCTYPE HTML\s*(.*?)\>\s*/;
+  close($fh);
+#  $/ = $oldsep;
+  $obj->{doctype} = $dtd;
+  return $dtd;
+}
+
+=item $doc->validate
+
+Validates the document. The return value is a reference to an array 
+containing the modified output from nsgmls.
+
+=cut
+
+#---------------------------------------------
+# validate the file
+#---------------------------------------------
+
+sub validate {
+  my $obj = shift;
+  return $obj->{errors} if defined $obj->{errors};
+  my $file = $obj->{file};
+#  print "$file\n";
+  unless (defined $file) {
+    $obj->{message} = "file not found";
+    return undef;
+  }
+
+  $obj->get_libwww if $obj->{useLWP};
+
+  if (defined $obj->{errors}) {
+    return $obj->{errors};
+  }
+  my $fh = $obj->{fh};
+  my $nsgmls = $obj->{nsgmls};
+  my $catalog = $obj->{catalog};
+  
+  if ($nsgmls =~ m:/: && ! -e $nsgmls) {
+#    carp("nsgmls binary '$nsgmls' not found");
+    $obj->{message} = "nsgmls not found";
+    return undef;
+  }
+#  print "$file $nsgmls $catalog\n";
+  if (!open($fh,"$nsgmls -s -c$catalog $file 2>&1 |")) {
+    $obj->{message} = "unable to execute nsgmls";
+    return undef;
+  }
+
+#  print "$file $nsgmls $catalog\n";
+  my $oldsep = $/;
+  undef $/;
+  $obj->{raw_output} = <$fh>;
+#  print $obj->{raw_output},"\n";
+  $/ = $oldsep;
+
+  $obj->{valid} = 1;
+  $obj->{message} = "valid";
+  $obj->parse_errors;
+  return $obj->{errors};
+}
+
+=item $doc->get_libwww
+
+Internal method used to retrieve an url via LWP.
+
+=cut
+
+#---------------------------------------------
+# store the http file
+#---------------------------------------------
+
+sub get_libwww {
+  my $obj = shift;
+  return $obj->{http_code} if defined $obj->{http_code};
+#  print $obj->{url},$obj->{file},"\n";
+  my $http_code=getstore($obj->{url},$obj->{file});
+  if ($http_code !~ /^2\d\d$/) {
+    my @error = "HTTP return code: $http_code";
+    $obj->{errors} = \@error;
+  }
+  $obj->{http_code} = $http_code;
+  return $http_code;
+}
+
+=item $doc->errors
+
+Returns a reference to an array containing the errors.
+
+=cut
+
+#---------------------------------------------
+# the error output
+#---------------------------------------------
+
+sub errors {
+  my $obj = shift;
+  return $obj->{errors};
+}
+
+
+=item $doc->parse_errors
+
+Internal method to parse the raw nsgmsl output to a more readable form.
+
+=cut
+
+#---------------------------------------------
+# parse the nsgmls errors
+#---------------------------------------------
+
+sub parse_errors {
+  my $obj = shift;
+#  print $obj->{raw_output},"\n";
+  return undef unless defined $obj->{raw_output};
+  return undef if defined $obj->{errors};
+
+#  print $obj->{raw_output};
+#  no strict "subs";
+#  my @lines = $obj->{raw_output};
+#  print @lines;
+#  my $line;
+#  foreach $line (@lines) {
+#    print "$line FOO\n";
+#  }
+  my $output = $obj->{raw_output};
+  
+  my @errors;
+  my $i=0;
+
+  while ($output =~ /^(.*?)\n/g) {
+    my $line = $1;
+
+    $line =~ s/^$obj->{nsgmls}://;
+    next if $line =~ /\.dtd:(\d+):(\d):E: /;
+    next if $line =~ /^\s*$/;
+
+    if ($line =~ s/^$obj->{file}://) {
+
+      if ($line =~ s/^(\d+):\d+:E: // || $line =~ s/^(\d+):\d+: //
+	 || $line =~ s/^(\d+):\d+:W: //) {
+	$errors[$i] = " Line $1: ";
+      }
+      $obj->{valid} = 0;
+      $obj->{message} = "not valid";
+      $errors[$i] .= "$line";
+      $i++;
+    }
+    $output =~ s/^.*?\n//;
+  }
+  $obj->{errors} = \@errors;
+}
+
+=item $doc->is_valid
+
+Returns 1 if document is valid, 0 if document is invalid and undef if
+document hasn't been validated yet.
+
+=cut
+
+#---------------------------------------------
+# is the document valid ?
+#---------------------------------------------
+
+sub is_valid {
+  my $obj = shift;
+  return $obj->{valid};
+}
+
+=item $doc->source
+
+Contains the source of the HTML file as a scalar.
+
+=cut
+
+#---------------------------------------------
+# the source of the HTML file
+#---------------------------------------------
+
+sub source {
+  my $obj = shift;
+  return $obj->{source} if defined $obj->{source};
+  return undef unless defined $obj->{file};
+  my $fh = $obj->{fh};
+  return undef unless open($fh,$obj->{file});
+  my $oldsep = $/;
+  undef $/;
+  $obj->{source} = <$fh>;
+  $/ = $oldsep;
+  return $obj->{source};
+  close $fh;
+}
+
+=item $doc->message
+
+A short message describing the latest output from the methods.
+
+=cut
+
+#----------------------------------------------
+# the message HTML::Validator wants to send out
+#----------------------------------------------
+
+sub message {
+  my $obj = shift;
+  return $obj->{message};
+}
+
+#----------------------------------------------
+# The destructor
+#----------------------------------------------
+
+END { 
+  my $obj = shift;
+#  print $tmpfile,"\n";
+  unlink $tmpfile;
+};
+
+1;
+
+__END__
+
+=back
+
+=head1 REQUIREMENTS
+
+  HTML::Validator requires that
+
+=over 3
+
+=item *
+
+I<nsgmls> is installed. It comes with James Clark's I<sp> SGML toolkit,
+I<http://www.jclark.com/sp/howtoget.htm>
+
+=item *
+
+you have a reasonable set of document type files. For this purpose, you can use
+W3C's sgml library at I<http://validator.w3.org/sgml-lib.tar.gz>
+
+=back
+
+=head1 SEE ALSO
+
+L<LWP>, L<nsgmls>
+
+=head1 ACKNOWLEDGEMENTS
+
+Thanks go to Heikki Kantola <hezu@iki.fi>, for his help in the early testing
+phases and his excellent knowledge about HTML standards.
+
+=head1 AVAILABILITY
+
+The latest version of HTML::Validator can be found from 
+I<http://www.iki.fi/si/HTML-Validator/>.
+
+It is also available from CPAN (I<http://www.perl.com/CPAN/>.
+
+=head1 COPYRIGHT
+
+HTML::Validator is (c) 1997,1998 Sami Itkonen <si@iki.fi>
+
+HTML::Validator is distributed under the GNU General Public License.
+
+=cut

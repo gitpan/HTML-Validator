@@ -1,0 +1,195 @@
+#!/usr/bin/perl
+#
+# Copyright 1997,1998 Sami Itkonen <si@iki.fi>
+#
+# Distributed under the GNU General Public License
+#
+# Sample validator script for HTML::Validator
+
+=head1 NAME
+
+validate - HTML validator
+
+=head1 SYNOPSIS
+
+ validate [-v] [-c catalog] [-n nsgmls] <URL|file> [URL|file] ...
+
+=head1 DESCRIPTION
+
+ The I<validate> script will validate a HTML document. The document can
+ be either local or it can be an URL.
+
+ Although useful as such, the script was written to demonstrate the usage
+ of the HTML::Validator module.
+
+ Documents supplied from the standard input will also be validated.
+
+=head1 OPTIONS
+
+=over 3
+
+=item -v
+
+Verbose operation. Output will be produced even if the document valid. In
+addition, the document type will be outputted.
+
+=item -c catalog
+
+The catalog to use instead of the default one.
+
+=item -n nsgmls
+
+The I<nsgmls> executable to use instead of the default one.
+
+=back
+
+=head1 SEE ALSO
+
+  L<HTML::Validator>, L<LWP>, L<nsgmls>
+
+=head1 AUTHOR
+
+Sami Itkonen <si@iki.fi>
+
+=head1 COPYRIGHT
+
+ Copyright © 1997,1998 Sami Itkonen <si@iki.fi>
+
+ HTML::Validator is distributed under the GNU General Public License.
+
+=cut
+
+require 5.004;
+require "getopts.pl";
+
+use HTML::Validator;
+use Carp;
+use FileHandle;
+
+my $ME = substr($0, rindex ($0, '/') + 1);
+
+
+Getopts('vhn:c:');
+
+$opt_v = 1 if $opt_d;
+
+&Usage if $opt_h;
+
+# check the standard input
+
+my $stdin = &CheckSTDIN();
+if (!$ARGV[0] && !$stdin) {&Usage;exit}
+
+#-----------------------------------------------------------------------------
+# If we have a file from stdin, we check that first
+#-----------------------------------------------------------------------------
+
+if ($stdin) {
+  my $TMPFILE = "/tmp/html.validate.$$";
+  my ($fh) = new FileHandle;
+  my ($fo) = new FileHandle;
+  open($fh,"-") or die "can't open stdin\n";
+  if (open($fo,">$TMPFILE")) {
+    my $oldsep = $/;
+    undef $/;
+    my $data = <$fh>;
+    print $fo $data;
+    close($fo);
+    $/ = $oldsep;
+    &CheckFile(STDIN,$TMPFILE);
+    unlink($TMPFILE);		
+  }
+  else {
+    carp("Can't write to file '$TMPFILE'");
+  }
+}
+
+#-----------------------------------------------------------------------------
+# go through the arguments
+#-----------------------------------------------------------------------------
+
+while (my $url = $ARGV[0]) {
+  shift;
+  &CheckFile($url,$url);
+}
+
+exit;
+
+#-----------------------------------------------------------------------------
+# Validate the file
+#-----------------------------------------------------------------------------
+
+sub CheckFile {
+  my ($url,$file) = @_;
+  my $doc = new HTML::Validator($file);
+  
+  if ($opt_v) {
+    print "Document type for '$url':\n",$doc->doctype,"\n\n";
+  }
+
+  $doc->{nsgmls} = $opt_n if $opt_n;
+  $doc->{catalog} = $opt_c if $opt_c;
+
+  $doc->validate;
+
+#  print $doc->{raw_output},"\n";
+  if (defined $doc->is_valid) {
+    if ($doc->is_valid) {
+      print "File '$url': ",$doc->message,"\n" if $opt_v;
+    }
+    else {
+      next unless defined $doc->is_valid;
+      print "In file '$url':\n\n";
+      my $error;
+      foreach $error (@{$doc->{errors}}) {
+	print $error,"\n";
+      }
+    }
+  }
+  else {
+      print "File '$url': ",$doc->message,"\n";
+  }
+  print "\n" if $opt_v || !$doc->is_valid;
+}
+
+#-----------------------------------------------------------------------------
+# Check if there's anything for us in the standard input, this method straight 
+# from the perl faq
+#-----------------------------------------------------------------------------
+
+sub CheckSTDIN {
+
+  my $rin;
+  vec($rin, fileno(STDIN), 1) = 1;
+  select($rin,undef,undef,0);
+  
+  if (unpack("b", $rin) eq 0) {
+    return 0;
+  }
+  else {
+    return 1;
+  }    
+}
+
+#-----------------------------------------------------------------------------
+# Usage
+#-----------------------------------------------------------------------------
+
+sub Usage {
+  die <<EOF;
+$ME © 1998 Sami Itkonen
+
+ Usage: $ME [-v] [-c catalog] [-n nsgmls] <URL|file> [URL|file] ...
+
+Checks the validity of html files, both locally and via http
+
+ Options: 
+
+    -v		 verbose mode
+    -d           debug mode (implies -v)
+    -c <catalog> substitute <catalog> for the default catalog file
+    -n <nsgmls>  substitute <nsgmls> for nsgmls
+
+EOF
+}
+
