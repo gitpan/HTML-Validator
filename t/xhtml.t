@@ -28,6 +28,11 @@ print "ok 3\n";
 
 # test generated errors
 
-print "not " unless $doc->errors =~ 
-  /document type does not allow element "br" here/;
-print "ok 4\n";
+if ($doc->{usexml} eq "NO") {
+  print "ok 4 # skipped because no XML support\n";
+}
+else {
+  print "not " unless $doc->errors =~ 
+    /document type does not allow element "br" here/;
+  print "ok 4\n";
+}

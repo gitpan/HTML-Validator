@@ -6,14 +6,16 @@ use ExtUtils::MakeMaker;
 
 my $args = {
   NSGMLS    => '',
-  SGMLCAT   => '/usr/local/lib/sgml-lib/catalog',
-  XHTMLCAT  => '/usr/local/lib/WD-html-in-xml/DTD/xhtml.soc',
-  XMLCAT    => '/usr/local/lib/xml/xml.soc',
+  SGMLCAT   => '#LIB#/sgml-lib/catalog',
+  XHTMLCAT  => '#LIB#/WD-html-in-xml/DTD/xhtml.soc',
+  XMLCAT    => '#LIB#/local/lib/xml/xml.soc',
+  LIB       => '/usr/local',
   QUICK     => 'NO',
-  XML       => 'YES',
+  XML       => 'ASK',
 };
 
 my @a;
+my $prefix;
 
 #----------------------------------------------------------------- 
 # Go through the argument list
@@ -22,6 +24,9 @@ my @a;
 while(my $arg = shift @ARGV) {
     
   if (my ($k,$v) = $arg =~ /^(.*?)=(.*?)$/) {
+    if ($k eq "PREFIX") {
+      $prefix = $v;
+    }
     if (defined($args->{$k})) {
       $args->{$k} = $v;
     }
@@ -39,7 +44,6 @@ while(my $arg = shift @ARGV) {
 }
 
 my $quick = 1 if $args->{QUICK} eq 'YES';
-my $noxml = 1 if $args->{XML} eq 'NO';
 
 #----------------------------------------------------------------- 
 # Search for nsgmls from the path
@@ -58,24 +62,48 @@ my @path = split /:/, $ENV{PATH};
  }
 
 #----------------------------------------------------------------- 
+# Put the libpath to the defaults
+#----------------------------------------------------------------- 
+
+my $k;
+foreach $k (keys %$args) {
+  if (defined $prefix) {
+    $args->{$k} =~ s|#LIB#|$prefix/lib|;
+  }
+  else {
+    $args->{$k} =~ s|#LIB#|$args->{LIB}/lib|;
+  }
+}
+
+#----------------------------------------------------------------- 
 # Check the arguments
 #----------------------------------------------------------------- 
 
 if ($quick) {
   $args->{NSGMLS} = $nsgmls;
+  $args->{XML} = "NO";
 }
 else {
-  my $file = askfile("nsgmls", $nsgmls);
-  $args->{NSGMLS} = $file if defined $file;
+  my $a = askfile("nsgmls", $nsgmls);
+  $args->{NSGMLS} = $a if defined $a;
 
-  my $file = askfile("SGML catalog file", $args->{SGMLCAT});
-  $args->{SGMLCAT} = $file if defined $file;
+  $a = askfile("SGML catalog file", $args->{SGMLCAT});
+  $args->{SGMLCAT} = $a if defined $a;
 
-  unless ($noxml) {
-    $file = askfile("XHTML catalog file", $args->{XHTMLCAT});
-    $args->{XHMTLCAT} = $file if defined $file;
-    $file = askfile("XML catalog file", $args->{XMLCAT});
-    $args->{XMLCAT} = $file if defined $file;
+  if ($args->{XML} eq "ASK") {
+    if (ask("Do you want XML support ? [y/N]") =~ /^y/i) {
+      $args->{XML} = "YES";
+    }
+    else {
+      $args->{XML} = "NO";
+    }
+  }
+
+  unless ($args->{XML} eq 'NO') {
+    $a = askfile("XHTML catalog file", $args->{XHTMLCAT});
+    $args->{XHMTLCAT} = $a if defined $a;
+    $a = askfile("XML catalog file", $args->{XMLCAT});
+    $args->{XMLCAT} = $a if defined $a;
   }
 }
 
@@ -133,7 +161,7 @@ WriteMakefile(
 	      VERSION_FROM => 'Validator.pm',
 	      PM           => { "Validator.pm" => '$(INST_LIBDIR)/Validator.pm'},	
 	      EXE_FILES    => [ 'bin/validate' ],
-	      PREREQ_PM    => { LWP => 5.36, },
+#	      PREREQ_PM    => { LWP => 5.36, },
 	      dist         => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
 	     );
 

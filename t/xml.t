@@ -19,11 +19,15 @@ print "ok 2\n";
 
 $doc->validate;
 
-# it should be valid as well
+# it should be valid as well - or otherwise we don't have XML support
 
-print "not " unless $doc->is_valid;
-print "ok 3\n";
-
+if ($doc->{usexml} eq "NO") {
+  print "ok 3 # skipped because no XML support\n";
+}
+else {
+  print "not " unless $doc->is_valid;
+  print "ok 3\n";
+}
 # the next document should be invalid
 
 $doc->reset;
@@ -33,7 +37,12 @@ $doc->validate;
 print "not " if $doc->is_valid;
 print "ok 4\n";
 
-print "not " unless $doc->errors =~ 
-  /document type does not allow element "break" here/;
+if ($doc->{usexml} eq "NO") {
+  print "ok 5 # skipped because no XML support\n";
+}
+else {
+  print "not " unless $doc->errors =~ 
+    /document type does not allow element "break" here/;
 
-print "ok 5\n";
+  print "ok 5\n";
+}

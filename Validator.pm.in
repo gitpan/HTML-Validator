@@ -17,7 +17,7 @@ use strict;
 use vars qw($VERSION $USELWP);
 use FileHandle;
 use Carp;
-$VERSION = "0.11";
+$VERSION = "0.12";
 
 my $tmpfile;
 my $tmpdir;
@@ -81,6 +81,7 @@ sub new {
   $self->{nsgmls} = "@NSGMLS@";
   $self->{maxerr} = 500;
   $self->{xmlcat} = "@XHTMLCAT@";
+  $self->{usexml} = "@XML@";
   $self->{xmldir} = substr($self->{xmlcat}, 0, 
 			   rindex ($self->{xmlcat}, '/') + 1);
   $self->{defaultdtd} = $defaultdtd;
@@ -171,9 +172,12 @@ sub checkdtd {
   my $dtdfile;
 #  print $obj->{doctype},"\n";
   my ($id,$url) = $obj->{"doctype"} =~ /\"(.*?)\"\s*\"(.*?)\"/;
+#"
+
   if (defined $url) {
     $obj->{dtdfile} = $url;
     $obj->{"doctype"} =~ s/\s*\"$url\"\s*$//;
+#"
     return $dtdfile;
   }
   my $fh = new FileHandle;
@@ -182,7 +186,8 @@ sub checkdtd {
   $dtdregexp =~ s/\s+/\\s\+/gs;
   $dtdregexp =~ s/\[/\\\[/gs;
 #  print $dtdregexp,"\n";
-  while (my $line = <$fh>) {
+  my $line;
+  while (defined($line = <$fh>)) {
     if (($dtdfile) = $line =~ /$dtdregexp\s+(.*?)$/) {
       close($fh);
       $obj->{dtdfile} = $dtdfile;
@@ -219,13 +224,6 @@ sub validate {
     return undef if $ret eq -1;
   }	
   
-#  if ($obj->{useLWP}) {
-#    $obj->get_libwww;
-#  }	
-#  else {
-#    system("cp",$obj->{url},$obj->{file});
-#  }
-
   if (defined $obj->{errors}) {
     return $obj->{errors};
   }
@@ -244,6 +242,10 @@ sub validate {
 
 #  print "$file $nsgmls $catalog\n";
   if (defined $obj->{XML}) {
+    if ($obj->{usexml} eq "NO") {
+      $obj->message("No XML support - cannot validate XML file");
+      return $obj->{errors};
+    }
     $opts .= "-wxml -c$xmlcat";
   }
   else {
@@ -347,10 +349,12 @@ sub get_file {
 # check if the doctype contains an URL
 
   my ($id,$url) = $dtd =~ /\"(.*?)\"\s*\"(.*?)\"/;
+#"
   unless (defined $url) {
 #    print $dtd,"\n";
     ($id,$url) = $dtd =~ /(.*?)\s*\"(.*?)\"/;
-#     print $id,"\n",$url,"\n";
+#     print $id,"\n",$url,"\n";#"
+
   }
   if (defined $url) {
     # we might have to download this
@@ -459,13 +463,12 @@ sub errors {
   my $obj = shift;
   my $r = $obj->{errors};
   my @array;
-  @array = @{$r};
+  @array = defined $r ? @{$r} : ();
   my $error = shift @array;
 #  print $error,"\n";
   $obj->{errors} = \@array;
   return $error;
 }
-
 
 =item $doc->parse_errors
 
