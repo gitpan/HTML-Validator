@@ -11,9 +11,22 @@ use vars qw($VERSION);
 use LWP::Simple;
 use FileHandle;
 use Carp;
-$VERSION = "0.04";
+$VERSION = "0.05";
 
 my $tmpfile;
+
+my $defaultdtd = 'html4';
+
+my $dtdmap = {
+     'html4'       => q{PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"},
+     'html4strict' => q{PUBLIC "-//W3C//DTD HTML 4.0//EN"},
+     'html4frame'  => q{PUBLIC "-//W3C//DTD HTML 4.0 Frameset//EN"},
+     'html3.2'     => q{PUBLIC "-//W3C//DTD HTML 3.2//EN"},
+     'html3'  => q{PUBLIC  "-//IETF//DTD HTML 3.0//EN//"},
+     'html2'  => q{PUBLIC "-//IETF//DTD HTML 2.0//EN"},
+     'nshtml' => q{PUBLIC "-//Netscape Comm. Corp.//DTD HTML//EN"},
+     'iehtml' => q{PUBLIC "-//Microsoft//DTD Internet Explorer 3.0 HTML//EN"},
+};
 
 =head1 NAME
 
@@ -52,6 +65,8 @@ sub new {
   $self->open($file) if defined $file; 
   $self->{catalog} = "@DTD@/catalog";
   $self->{nsgmls} = "@NSGMLS@";
+  $self->{defaultdtd} = $defaultdtd;
+  $self->{dtdmap} = $dtdmap;
   return $self;
 }
 
@@ -80,7 +95,7 @@ sub open {
   }
   else {
     return undef unless -r $file;
-    $obj->{file} = $file;
+    $obj->{file} = $obj->{tmpfile};
     $obj->{url} = $file;
   }
   return 1;
@@ -88,10 +103,12 @@ sub open {
 
 =item $doc->doctype
 
-Returns the document type by parsing the start of the file.
+Returns the document type.
 
 The return value is undefined if no filename has been passed to the 
 object via the constructor or the I<open> method.
+
+If the file has not been retrieved yet, it will be done.
 
 =cut
 
@@ -101,20 +118,50 @@ object via the constructor or the I<open> method.
 
 sub doctype {
   my $obj = shift;
-  return $obj->{doctype} if defined $obj->{doctype};
-  return undef unless defined $obj->{file};
-  $obj->get_libwww if $obj->{useLWP} && !defined $obj->{valid};
-#  my $oldsep = $/;
-#  undef $/;
-  my $fh = $obj->{fh};
-  return undef unless open($fh,$obj->{file});
-  my $dtdstring = <$fh>;
-#  print "$dtdstring\n";
-  my ($dtd) = $dtdstring =~ /^\s*\<\s*\!DOCTYPE HTML\s*(.*?)\>\s*/;
+  
+  my ($input) = shift;
+  if (defined $input) {
+    $obj->{newdoctype} = $input;
+  }
+  else {
+    return undef unless defined $obj->{file};
+    $obj->get_file unless defined $obj->{data};
+    return $obj->{doctype};
+    
+  }
+}
+
+=item $doc->checkdtd
+
+Finds out the actual name of document type definition file that is used.
+The return value is the name of the file, or undefined if the document type
+is not defined.
+
+=cut
+
+#---------------------------------------------
+# check which dtd is used
+#---------------------------------------------
+
+sub checkdtd {
+  my $obj = shift;
+  return $obj->{dtdfile} if defined $obj->{dtdfile};
+  return undef unless defined $obj->{doctype};
+#  print $obj->{doctype},"\n";
+  my $fh = new FileHandle;
+  return -1 unless open($fh,$obj->{catalog});
+  my $dtdregexp = $obj->{doctype};
+  $dtdregexp =~ s/\s+/\\s\+/g;
+#  print $dtdregexp,"\n";
+  while (my $line = <$fh>) {
+    if (my ($dtdfile) = $line =~ /$dtdregexp\s+(.*?)$/) {
+      close($fh);
+      $obj->{dtdfile} = $dtdfile;
+      return $dtdfile;
+    }
+  }
   close($fh);
-#  $/ = $oldsep;
-  $obj->{doctype} = $dtd;
-  return $dtd;
+  return undef;
 }
 
 =item $doc->validate
@@ -134,11 +181,18 @@ sub validate {
   my $file = $obj->{file};
 #  print "$file\n";
   unless (defined $file) {
-    $obj->{message} = "file not found";
+    $obj->message("file not found");
     return undef;
   }
 
-  $obj->get_libwww if $obj->{useLWP};
+  $obj->get_file unless defined $obj->{data};
+
+#  if ($obj->{useLWP}) {
+#    $obj->get_libwww;
+#  }	
+#  else {
+#    system("cp",$obj->{url},$obj->{file});
+#  }
 
   if (defined $obj->{errors}) {
     return $obj->{errors};
@@ -149,12 +203,12 @@ sub validate {
   
   if ($nsgmls =~ m:/: && ! -e $nsgmls) {
 #    carp("nsgmls binary '$nsgmls' not found");
-    $obj->{message} = "nsgmls not found";
+    $obj->message("Nsgmls not found");
     return undef;
   }
 #  print "$file $nsgmls $catalog\n";
   if (!open($fh,"$nsgmls -s -c$catalog $file 2>&1 |")) {
-    $obj->{message} = "unable to execute nsgmls";
+    $obj->message("Unable to execute nsgmls");
     return undef;
   }
 
@@ -166,14 +220,68 @@ sub validate {
   $/ = $oldsep;
 
   $obj->{valid} = 1;
-  $obj->{message} = "valid";
+#  $obj->message("valid");
   $obj->parse_errors;
+  $obj->message("Document is valid") if $obj->{valid};
   return $obj->{errors};
 }
 
-=item $doc->get_libwww
+=item $doc->get_file
 
-Internal method used to retrieve an url via LWP.
+Internal method to get the file and process the doctype information.
+
+=cut
+
+#---------------------------------------------
+# get the file and process the doctype information
+#---------------------------------------------
+
+sub get_file {
+  my $obj = shift;
+  return $obj->{data} if defined $obj->{data};
+  return undef unless defined $obj->{file};
+  my $fh = new FileHandle;
+  my $data;
+  if ($obj->{useLWP}) {
+    $data = get($obj->{url});
+  }
+  else {
+    my $oldsep = $/;
+    undef $/;
+    return undef unless open($fh,$obj->{url});
+    
+    $data = <$fh>;
+    close($fh);
+    $/ = $oldsep;
+    
+  }
+
+  my ($dtd) = $data =~ /^\s*\<\s*\!DOCTYPE HTML\s*(.*?)\>\s*/i;
+  $obj->{doctype} = $dtd;
+  $obj->{data} = $data;
+    
+  if (my $type =  $obj->{newdoctype}) {
+    if (my $dtdstr = $obj->{dtdmap}->{$type}) {
+      $obj->replace_dtd($dtdstr);
+    }
+  }
+  elsif ($dtd =~ /^\s*$/) {
+    $obj->replace_dtd;
+  }
+
+  $obj->checkdtd;
+#  print $data,"\n";
+#    system("cp",$obj->{url},$obj->{file});
+
+  return undef unless open($fh,">$obj->{file}");
+  print $fh $obj->{data};
+  close($fh);
+}
+
+=item $doc->replace_dtd
+
+Replaces the document type definition on the file. The new dtd is the
+first argument, or the default dtd if no argument is supplied.
 
 =cut
 
@@ -181,22 +289,33 @@ Internal method used to retrieve an url via LWP.
 # store the http file
 #---------------------------------------------
 
-sub get_libwww {
+sub replace_dtd {
   my $obj = shift;
-  return $obj->{http_code} if defined $obj->{http_code};
-#  print $obj->{url},$obj->{file},"\n";
-  my $http_code=getstore($obj->{url},$obj->{file});
-  if ($http_code !~ /^2\d\d$/) {
-    my @error = "HTTP return code: $http_code";
-    $obj->{errors} = \@error;
+  my ($dtd) = @_;
+  $dtd = $obj->{dtdmap}->{$obj->{defaultdtd}} unless defined $dtd;
+  my $dtdstr = "<!DOCTYPE HTML " . $dtd . ">";
+#  print $dtd,"\n";
+  my $data = $obj->{data};
+  if ($obj->{doctype} =~ /^\s*$/) {
+    # no doctype; need a new one
+    $data =~ s/^/$dtdstr\n/;
+    $obj->message("No document type defined");
   }
-  $obj->{http_code} = $http_code;
-  return $http_code;
+  else {
+    # just replace it
+    $data =~ s/^\s*\<\s*\!DOCTYPE HTML\s*(.*?)\>\s*/$dtdstr\n/i;
+  }
+  $obj->message("Replacing dtd with '$dtd'");
+  $obj->{data} = $data;
+#  print $obj->{newdoctype},"\n";
+#  print $obj->{defaultdtd},"\n";
+#  print "$data\n";
+  $obj->{doctype} = $dtd;
 }
 
 =item $doc->errors
 
-Returns a reference to an array containing the errors.
+Returns an error from nsgmls error output queue.
 
 =cut
 
@@ -206,13 +325,21 @@ Returns a reference to an array containing the errors.
 
 sub errors {
   my $obj = shift;
-  return $obj->{errors};
+  my $r = $obj->{errors};
+  my @array;
+  @array = @{$r};
+  my $error = shift @array;
+#  print $error,"\n";
+  $obj->{errors} = \@array;
+  return $error;
 }
 
 
 =item $doc->parse_errors
 
 Internal method to parse the raw nsgmsl output to a more readable form.
+If you want to call this method more than once per object, purge the error
+output queue with $doc->errors first.
 
 =cut
 
@@ -252,8 +379,8 @@ sub parse_errors {
 	 || $line =~ s/^(\d+):\d+:W: //) {
 	$errors[$i] = " Line $1: ";
       }
+      $obj->message("Document is invalid") unless $obj->{valid} eq 0;
       $obj->{valid} = 0;
-      $obj->{message} = "not valid";
       $errors[$i] .= "$line";
       $i++;
     }
@@ -290,21 +417,18 @@ Contains the source of the HTML file as a scalar.
 
 sub source {
   my $obj = shift;
-  return $obj->{source} if defined $obj->{source};
+  return $obj->{data} if defined $obj->{data};
   return undef unless defined $obj->{file};
-  my $fh = $obj->{fh};
-  return undef unless open($fh,$obj->{file});
-  my $oldsep = $/;
-  undef $/;
-  $obj->{source} = <$fh>;
-  $/ = $oldsep;
-  return $obj->{source};
-  close $fh;
+  $obj->get_file unless defined $obj->{data};
+  return $obj->{data};
 }
 
 =item $doc->message
 
-A short message describing the latest output from the methods.
+Contains the message queue. If called with an argument, places a new message
+to the queue, without an argument a message (if any) is removed.
+
+If the argument is '-1', the last message on the queue is returned.
 
 =cut
 
@@ -314,7 +438,26 @@ A short message describing the latest output from the methods.
 
 sub message {
   my $obj = shift;
-  return $obj->{message};
+  my ($msg) = @_;
+  my $r = $obj->{message};
+  my @array;
+  @array = @{$r} if defined $r;
+  if (defined $msg) {
+#    print "adding message '$msg'\n";
+    if ($msg eq -1) {
+      $msg = pop (@array);
+    }
+    else {
+      push (@array,$msg);
+    }
+  }
+  else {
+    $msg = shift (@array);
+#    print "removing message '$msg'\n";
+  }
+  $obj->{message} = \@array;
+#  print @{$r},"\n" if defined $r;
+  return $msg;
 }
 
 #----------------------------------------------
@@ -332,6 +475,37 @@ END {
 __END__
 
 =back
+
+=head1 VARIABLES
+
+=item $doc->{nsgmls}
+
+The used I<nsgmls> binary
+
+=item $doc->{catalog}
+
+The used catalog file
+
+=item $doc->{message}
+
+Array of messages
+
+=item $doc->{doctype}
+
+The document type for the document
+
+=item $doc->{defaultdtd}
+
+The default type for the document. By default this is 'html4'.
+
+=item $doc->{dtdfile}
+
+The dtd used for the document
+
+=item $doc->{dtdmap}
+
+The mapping for document types and the explicit document type definition
+strings
 
 =head1 REQUIREMENTS
 

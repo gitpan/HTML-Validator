@@ -12,7 +12,7 @@ validate - HTML validator
 
 =head1 SYNOPSIS
 
- validate [-v] [-c catalog] [-n nsgmls] <URL|file> [URL|file] ...
+ validate [-v] [-c catalog] [-n nsgmls] [-d doctype] <URL|file> [URL|file] ...
 
 =head1 DESCRIPTION
 
@@ -40,6 +40,10 @@ The catalog to use instead of the default one.
 =item -n nsgmls
 
 The I<nsgmls> executable to use instead of the default one.
+
+=item -d doctype
+
+Use this document type instead of the one written on the file
 
 =back
 
@@ -69,9 +73,7 @@ use FileHandle;
 my $ME = substr($0, rindex ($0, '/') + 1);
 
 
-Getopts('vhn:c:');
-
-$opt_v = 1 if $opt_d;
+Getopts('vhn:c:d:');
 
 &Usage if $opt_h;
 
@@ -123,8 +125,12 @@ sub CheckFile {
   my ($url,$file) = @_;
   my $doc = new HTML::Validator($file);
   
+  if (defined $opt_d) {
+    $doc->doctype($opt_d);
+  }
   if ($opt_v) {
-    print "Document type for '$url':\n",$doc->doctype,"\n\n";
+    print "Document type for '$url':\n",$doc->doctype 
+      , " (" , $doc->{dtdfile} ,")\n\n";
   }
 
   $doc->{nsgmls} = $opt_n if $opt_n;
@@ -135,13 +141,16 @@ sub CheckFile {
 #  print $doc->{raw_output},"\n";
   if (defined $doc->is_valid) {
     if ($doc->is_valid) {
-      print "File '$url': ",$doc->message,"\n" if $opt_v;
+      print "File '$url': ",$doc->message(-1),"\n" if $opt_v;
     }
     else {
       next unless defined $doc->is_valid;
       print "In file '$url':\n\n";
-      my $error;
-      foreach $error (@{$doc->{errors}}) {
+      while (my $msg = $doc->message) {
+	print " ",$msg,"\n";
+      }
+      print "\n";
+      while (my $error = $doc->errors) {
 	print $error,"\n";
       }
     }
@@ -186,7 +195,7 @@ Checks the validity of html files, both locally and via http
  Options: 
 
     -v		 verbose mode
-    -d           debug mode (implies -v)
+    -d <doctype> use a different document type
     -c <catalog> substitute <catalog> for the default catalog file
     -n <nsgmls>  substitute <nsgmls> for nsgmls
 
