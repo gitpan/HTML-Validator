@@ -1,6 +1,8 @@
 COPYING
 README
 MANIFEST
+CHANGES
+valid.gif
 configure.in
 configure
 Makefile.PL

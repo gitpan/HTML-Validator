@@ -11,7 +11,7 @@ use vars qw($VERSION);
 use LWP::Simple;
 use FileHandle;
 use Carp;
-$VERSION = "0.03";
+$VERSION = "0.04";
 
 my $tmpfile;
 
@@ -365,11 +365,11 @@ phases and his excellent knowledge about HTML standards.
 The latest version of HTML::Validator can be found from 
 I<http://www.iki.fi/si/HTML-Validator/>.
 
-It is also available from CPAN (I<http://www.perl.com/CPAN/>.
+It is also available from CPAN (I<http://www.perl.com/CPAN/>).
 
 =head1 COPYRIGHT
 
-HTML::Validator is (c) 1997,1998 Sami Itkonen <si@iki.fi>
+HTML::Validator is (c) 1997-1999 Sami Itkonen <si@iki.fi>
 
 HTML::Validator is distributed under the GNU General Public License.
 
