@@ -4,14 +4,20 @@ package HTML::Validator;
 #
 # Distributed under the GNU General Public License
 
-@ISA=qw(LWP::Simple);
+BEGIN {
+  if (eval 'use LWP::Simple', $@ eq '') {
+    $USELWP = 1;
+  }
+  else {
+    $USELWP = 0;
+  }
+}
 
 use strict;
-use vars qw($VERSION);
-use LWP::Simple;
+use vars qw($VERSION $USELWP);
 use FileHandle;
 use Carp;
-$VERSION = "0.08";
+$VERSION = "0.10";
 
 my $tmpfile;
 my $tmpdir;
@@ -71,10 +77,12 @@ sub new {
   $self->deltempfiles;
   mkdir $tmpdir,0700;
   $self->open($file) if defined $file; 
-  $self->{catalog} = "@DTD@/catalog";
+  $self->{catalog} = "@SGMLCAT@";
   $self->{nsgmls} = "@NSGMLS@";
-  $self->{xmldir} = "@XML@";
-  $self->{xmlcat} = "@XML@/xhtml.soc";
+  $self->{maxerr} = 500;
+  $self->{xmlcat} = "@XHTMLCAT@";
+  $self->{xmldir} = substr($self->{xmlcat}, 0, 
+			   rindex ($self->{xmlcat}, '/') + 1);
   $self->{defaultdtd} = $defaultdtd;
   $self->{dtdmap} = $dtdmap;
   return $self;
@@ -281,6 +289,10 @@ sub get_file {
   my $fh = new FileHandle;
   my $data;
   if ($obj->{useLWP}) {
+    if (!$USELWP) {
+      $obj->message("HTTP downloads not supported without LWP");
+      return -1;
+    }
     $data = get($obj->{url});
     if ($data =~ /^\s*$/) {
       $obj->message("Unable to download file");
