@@ -73,7 +73,7 @@ use FileHandle;
 my $ME = substr($0, rindex ($0, '/') + 1);
 
 
-Getopts('vhn:c:d:');
+Getopts('vhn:c:d:p');
 
 &Usage if $opt_h;
 
@@ -135,6 +135,7 @@ sub CheckFile {
 
   $doc->{nsgmls} = $opt_n if $opt_n;
   $doc->{catalog} = $opt_c if $opt_c;
+  $doc->{parser} = \&my_parser if $opt_p;
 
   $doc->validate;
 
@@ -181,6 +182,25 @@ sub CheckSTDIN {
 }
 
 #-----------------------------------------------------------------------------
+# Custom parser to override the module default
+#-----------------------------------------------------------------------------
+
+sub my_parser {
+    my ($output) = @_;
+    my $valid = 1;
+    my @errors;
+    while ($output =~ s/^(.*?)\n//) {
+      my $line = $1;
+      my ($nsgmls,$file,$li,$pos,$code,$error) = 
+	$line =~ /^(.*?):(.*?):(.*?):(.*?):(.*?):(.*)/;
+      next if $file =~ /sgml-lib/;
+      push (@errors,"Error in line $li, position $pos:\n$error\n");
+      $valid = 0;
+    }
+    return $valid ? undef : \@errors;
+}
+
+#-----------------------------------------------------------------------------
 # Usage
 #-----------------------------------------------------------------------------
 
@@ -195,6 +215,8 @@ Checks the validity of html files, both locally and via http
  Options: 
 
     -v		 verbose mode
+    -p           use a custom parser in this script 
+                 (for demonstation purposes only)
     -d <doctype> use a different document type
     -c <catalog> substitute <catalog> for the default catalog file
     -n <nsgmls>  substitute <nsgmls> for nsgmls

@@ -11,7 +11,7 @@ use vars qw($VERSION);
 use LWP::Simple;
 use FileHandle;
 use Carp;
-$VERSION = "0.05";
+$VERSION = "0.06";
 
 my $tmpfile;
 
@@ -185,8 +185,11 @@ sub validate {
     return undef;
   }
 
-  $obj->get_file unless defined $obj->{data};
-
+  unless (defined $obj->{data}) {
+    my $ret = $obj->get_file; 
+    return undef if $ret eq -1;
+  }	
+  
 #  if ($obj->{useLWP}) {
 #    $obj->get_libwww;
 #  }	
@@ -222,7 +225,7 @@ sub validate {
   $obj->{valid} = 1;
 #  $obj->message("valid");
   $obj->parse_errors;
-  $obj->message("Document is valid") if $obj->{valid};
+#  $obj->message("Document is valid") if $obj->{valid};
   return $obj->{errors};
 }
 
@@ -244,6 +247,10 @@ sub get_file {
   my $data;
   if ($obj->{useLWP}) {
     $data = get($obj->{url});
+    if ($data =~ /^\s*$/) {
+      $obj->message("Unable to download file");
+      return -1;
+    }
   }
   else {
     my $oldsep = $/;
@@ -256,7 +263,7 @@ sub get_file {
     
   }
 
-  my ($dtd) = $data =~ /^\s*\<\s*\!DOCTYPE HTML\s*(.*?)\>\s*/i;
+  my ($dtd) = $data =~ /^\s*\<\s*\!DOCTYPE HTML\s*(.*?)\>\s*/;
   $obj->{doctype} = $dtd;
   $obj->{data} = $data;
     
@@ -266,7 +273,7 @@ sub get_file {
     }
   }
   elsif ($dtd =~ /^\s*$/) {
-    $obj->replace_dtd;
+     $obj->replace_dtd;
   }
 
   $obj->checkdtd;
@@ -286,7 +293,7 @@ first argument, or the default dtd if no argument is supplied.
 =cut
 
 #---------------------------------------------
-# store the http file
+# replace the dtd in the file
 #---------------------------------------------
 
 sub replace_dtd {
@@ -341,6 +348,9 @@ Internal method to parse the raw nsgmsl output to a more readable form.
 If you want to call this method more than once per object, purge the error
 output queue with $doc->errors first.
 
+This method will call a parser method to do the actual parsing, which is
+$doc->parser() by default. It can overriden by setting $doc->{parser}.
+
 =cut
 
 #---------------------------------------------
@@ -349,22 +359,54 @@ output queue with $doc->errors first.
 
 sub parse_errors {
   my $obj = shift;
-#  print $obj->{raw_output},"\n";
-  return undef unless defined $obj->{raw_output};
+
   return undef if defined $obj->{errors};
 
-#  print $obj->{raw_output};
-#  no strict "subs";
-#  my @lines = $obj->{raw_output};
-#  print @lines;
-#  my $line;
-#  foreach $line (@lines) {
-#    print "$line FOO\n";
-#  }
-  my $output = $obj->{raw_output};
+  my $error_output;
+
+  if (defined $obj->{parser}) {
+    $error_output = &{$obj->{parser}}($obj->{raw_output});
+  }
+  else {
+    $error_output = $obj->parser($obj->{raw_output});
+  }
+
+  if (defined $error_output) {
+    # the document is invalid
+    $obj->message("Document is invalid");
+    $obj->{valid} = 0;
+    my @array = @{$error_output};
+    $obj->{errors} = \@array;
+  }
+  else {
+    # the document is valid
+    $obj->message("Document is valid");
+    $obj->{valid} = 1;
+  }
+
+}
+
+=item $doc->parser
+
+The default nsgmls output parser. This is called from parse_errors. 
+If the return value is undef, then to parser is assumed to have found no
+errors. Otherwise the parser will return a reference to an array containing
+the errors.
+
+=cut
+
+#---------------------------------------------
+# the default parser
+#---------------------------------------------
+
+sub parser {
+  my $obj = shift;
+
+  my $output = shift;
   
   my @errors;
   my $i=0;
+  my $valid = 1;
 
   while ($output =~ /^(.*?)\n/g) {
     my $line = $1;
@@ -375,19 +417,22 @@ sub parse_errors {
 
     if ($line =~ s/^$obj->{file}://) {
 
-      if ($line =~ s/^(\d+):\d+:E: // || $line =~ s/^(\d+):\d+: //
-	 || $line =~ s/^(\d+):\d+:W: //) {
-	$errors[$i] = " Line $1: ";
+      if ($line =~ s/^(\d+):(\d+):E: // || $line =~ s/^(\d+):(\d+): //
+	 || $line =~ s/^(\d+):(\d+):W: //) {
+	$errors[$i] = sprintf(" Line %3d.%2d: ",$1,$2);
       }
-      $obj->message("Document is invalid") unless $obj->{valid} eq 0;
-      $obj->{valid} = 0;
+      $valid = 0;
       $errors[$i] .= "$line";
       $i++;
     }
     $output =~ s/^.*?\n//;
   }
-  $obj->{errors} = \@errors;
+  return $valid ? undef : \@errors;
 }
+
+#---------------------------------------------
+# parse the nsgmls errors
+#---------------------------------------------
 
 =item $doc->is_valid
 
@@ -506,6 +551,10 @@ The dtd used for the document
 
 The mapping for document types and the explicit document type definition
 strings
+
+=item $doc->{parser}
+
+The custom parser to use. See the information for the parser method.
 
 =head1 REQUIREMENTS
 

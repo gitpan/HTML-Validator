@@ -1,12 +1,2 @@
-Version 0.04, Fri 1 Jan 1999
-
-	- No code changes
-	- Made a home page for HTML::Validator and changed the documentation to
-	  reflect this
-	- Made a validator image that can be used on a web page
-
-------------------------------------------------------------------------
-
-Version 0.03, Tue 22 Dec 1998
-
-	- first public release
+This file is no longer being maintained. An up-to-date history of changes
+can be found from <URL:http://www.iki.fi/si/HTML-Validator/changes.html>.
