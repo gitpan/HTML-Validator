@@ -79,6 +79,23 @@ else {
   }
 }
 
+#----------------------------------------------------------------- 
+#
+#----------------------------------------------------------------- 
+
+sub MY::dist_core {
+    package MY; # so that "SUPER" works right
+    my $inherited = shift->SUPER::dist_core(@_);
+    $inherited =~ s/(dist : )/$1 validator_dummy /g; 
+    $inherited;
+}
+
+sub MY::postamble {
+    '
+validator_dummy ::
+	cp Validator.pm.dummy Validator.pm
+';
+}
 
 #----------------------------------------------------------------- 
 # Generate Validator.pm
