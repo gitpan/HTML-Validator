@@ -30,7 +30,7 @@ REQUIREMENTS
 	- you can use W3C's sgml library files that are
 	  found from <URL:http://validator.w3.org/sgml-lib.tar.gz>
         - for XHTML the document type files can be downloaded from
-          http://www.w3.org/TR/WD-html-in-xml/WD-html-in-xml.zip
+          http://www.w3.org/TR/xhtml1/xhtml1.zip
 
 It is recommended that you also install LWP (libwww-perl), if you
 want to validate documents on the web.
@@ -76,13 +76,13 @@ phases and his excellent knowledge about HTML standards.
 AVAILABILITY
 
 The latest version of HTML::Validator can be found from 
-http://www.iki.fi/si/HTML-Validator/
+http://www.iki.fi/si/validator/
 It is also available from CPAN <URL:http://www.perl.com/CPAN/>.
 
 
 COPYRIGHT
 
-HTML::Validator is © 1997-1999 Sami Itkonen <si@iki.fi>
+HTML::Validator is © 1997-2000 Sami Itkonen <si@iki.fi>
 
 HTML::Validator is distributed under the GNU General Public License.
 

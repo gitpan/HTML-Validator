@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# Copyright 1997-1999 Sami Itkonen <si@iki.fi>
+# Copyright 1997-2000 Sami Itkonen <si@iki.fi>
 #
 # Distributed under the GNU General Public License
 #
@@ -57,7 +57,7 @@ Sami Itkonen <si@iki.fi>
 
 =head1 COPYRIGHT
 
- Copyright © 1997-1999 Sami Itkonen <si@iki.fi>
+ Copyright © 1997-2000 Sami Itkonen <si@iki.fi>
 
  HTML::Validator is distributed under the GNU General Public License.
 
@@ -74,7 +74,7 @@ my $ME = substr($0, rindex ($0, '/') + 1);
 
 Getopts('vhlsn:c:e:d:pf');
 
-my $maxerr = defined $opt_e ? $opt_e : 10;
+my $maxerr = $opt_e || 500;
 
 &Usage if $opt_h;
 
@@ -82,7 +82,7 @@ my $maxerr = defined $opt_e ? $opt_e : 10;
 if (defined $opt_l) {
     my $list = new HTML::Validator;
     my $map = $list->{dtdmap};
-    print "$ME © 1998,1999 Sami Itkonen\n\n";
+    print "$ME © 1998-2000 Sami Itkonen\n\n";
     print "List of recognized document types (for -d switch):\n\n";
     foreach $htmlstr (keys %{$map}) {
        printf "%-15s %s\n",$htmlstr,${$map}{$htmlstr};
@@ -94,6 +94,8 @@ if (defined $opt_l) {
 # check the standard input
 
 my $stdin = &CheckSTDIN();
+$stdin = 0 if ($^O =~ /Win/i && $ARGV[0]); # skipping
+
 if (!$ARGV[0] && !$stdin) {&Usage;exit}
 
 #-----------------------------------------------------------------------------
@@ -235,7 +237,7 @@ sub my_parser {
 
 sub Usage {
   die <<EOF;
-$ME © 1998,1999 Sami Itkonen
+$ME © 1998-2000 Sami Itkonen
 
  Usage: $ME [-v] [-c catalog] [-n nsgmls] <URL|file> [URL|file] ...
 

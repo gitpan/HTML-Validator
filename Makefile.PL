@@ -7,7 +7,7 @@ use ExtUtils::MakeMaker;
 my $args = {
   NSGMLS    => '',
   SGMLCAT   => '#LIB#/sgml-lib/catalog',
-  XHTMLCAT  => '#LIB#/WD-html-in-xml/DTD/xhtml.soc',
+  XHTMLCAT  => '#LIB#/xhtml1/DTD/xhtml.soc',
   XMLCAT    => '#LIB#/local/lib/xml/xml.soc',
   LIB       => '/usr/local',
   QUICK     => 'NO',
@@ -51,8 +51,9 @@ my $quick = 1 if $args->{QUICK} eq 'YES';
 
 my $nsgmls;
 my $dir;
+my $splitchar = ($^O =~ /Win/i) ? ';' : ':';
 
-my @path = split /:/, $ENV{PATH};
+my @path = split /$splitchar/, $ENV{PATH};
 
  FIND: foreach $dir (@path) {
    if (-x "$dir/nsgmls") {

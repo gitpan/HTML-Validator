@@ -14,7 +14,7 @@ print "not " if $doc->doctype ne 'PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"';
 
 print "ok 1\n";
 
-print "not" if $doc->{dtdfile} ne 'http://www.w3.org/TR/WD-html-in-xml/DTD/xhtml1-strict.dtd';
+print "not" if $doc->{dtdfile} ne 'http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd';
 
 print "ok 2\n";
 

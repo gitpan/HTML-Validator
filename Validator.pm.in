@@ -17,7 +17,8 @@ use strict;
 use vars qw($VERSION $USELWP);
 use FileHandle;
 use Carp;
-$VERSION = "0.12";
+
+$VERSION = "0.13";
 
 my $tmpfile;
 my $tmpdir;
@@ -26,6 +27,7 @@ my $tmpdtd;
 my $defaultdtd = 'html4';
 
 my $dtdmap = {
+     'xhtml1'      => q{PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"},
      'html4'       => q{PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN"},
      'html4strict' => q{PUBLIC "-//W3C//DTD HTML 4.0//EN"},
      'html4frame'  => q{PUBLIC "-//W3C//DTD HTML 4.0 Frameset//EN"},
@@ -68,14 +70,20 @@ sub new {
   bless $self, $class;
 #    $self->initialize();
   my $file = shift;
-  $tmpdir = "/tmp/validator-".$ENV{USER}."$$/";
-  $tmpfile = $tmpdir . $ENV{USER} . time unless defined $tmpfile;
+  my $user = $ENV{LOGNAME} || $ENV{USER};                                   
+
+  my $gentmp = $ENV{TEMP} || ($^O =~ /Win/i) ? "c:/temp/" : '/tmp/';
+  -d $gentmp or mkdir $gentmp, 0700; # to be sure or die?
+
+  $tmpdir = join '', $gentmp, "validator-", $user, "$$";
+  mkdir $tmpdir, 0700;
+
+  $tmpfile = join '', $tmpdir, '/', $user, time unless defined $tmpfile;    
   $self->{tmpfile} = $tmpfile;
   $self->{tmpdir} = $tmpdir;
 #  print $tmpdir,"\n";
 #  print $tmpfile,"\n";
   $self->deltempfiles;
-  mkdir $tmpdir,0700;
   $self->open($file) if defined $file; 
   $self->{catalog} = "@SGMLCAT@";
   $self->{nsgmls} = "@NSGMLS@";
@@ -252,7 +260,7 @@ sub validate {
     $opts .= "-c $catalog";
   }
 
-#  print "$nsgmls -s $opts $file 2>&1 |\n";
+#  $obj->message("$nsgmls -s $opts $file");
 
   if (!CORE::open($fh,"$nsgmls -s $opts $file 2>&1 |")) {
     $obj->message("Unable to execute nsgmls");
@@ -755,8 +763,10 @@ L<LWP>, L<nsgmls>
 
 =head1 ACKNOWLEDGEMENTS
 
-Thanks go to Heikki Kantola <hezu@iki.fi>, for his help in the early testing
-phases and his excellent knowledge about HTML standards.
+Thanks go to:
+
+ - Heikki Kantola <hezu@iki.fi>, for his help in the early testing
+   phases and his excellent knowledge about HTML standards.
 
 =head1 AVAILABILITY
 
